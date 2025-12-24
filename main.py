@@ -65,26 +65,30 @@ def parse_signal(text):
 # ================= 監聽事件 =================
 @client.on(events.NewMessage())
 async def handler(event):
-    # 過濾群組：只處理 TARGET_GROUP_ID 的訊息
-    if event.chat_id != TARGET_GROUP_ID:
-       # print(f"忽略非目標來源: {event.chat_id}")
-       return
-
+    # --- 🕵️ 除錯模式：什麼都聽，什麼都印 ---
     text = event.raw_text
-    print(f"🕵️ 收到訊號源 | ID: {event.chat_id} | 內容:\n{text}")
+    chat_id = event.chat_id
     
-    # 呼叫解析函式
+    print(f"========================================")
+    print(f"📢 聽到訊息了！")
+    print(f"來源群組 ID: {chat_id}")  # 👈 關鍵！請看這裡印出什麼數字
+    print(f"內容: {text[:50]}...")   # 印出前50個字
+    
+    # 解析訊息
     result = parse_signal(text)
     
     if result:
-        # 更新全域變數
+        # 不管 ID 對不對，只要格式對了先廣播 (方便測試)
         current_signal["id"] = int(time.time() * 1000)
         current_signal["action"] = result["action"]
         current_signal["sl"] = result["sl"]
         current_signal["tp"] = result["tp"]
-        current_signal["msg"] = text[:50] # 紀錄前50字用於除錯
         
-        print(f"🚀 廣播更新! 動作:{result['action']} | SL:{result['sl']} | TP:{result['tp']} (ID:{current_signal['id']})")
+        print(f"✅ 解析成功！準備下單：{result['action']} | SL:{result['sl']} | TP:{result['tp']}")
+    else:
+        print(f"❌ 格式不符 (Regex沒抓到)")
+    
+    print(f"========================================")
 
 # ================= 系統啟動與 API =================
 @app.on_event("startup")
@@ -100,3 +104,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     # 必須使用 uvicorn 啟動
     uvicorn.run(app, host="0.0.0.0", port=port)
+
