@@ -102,7 +102,7 @@ async def password_check(event):
             # allow_cache=False 強制重新讀取檔案
             await event.respond(
                 "🎁 這是您的 EA 與使用說明：\n請按照說明書進行安裝。",
-                file=['EA.ex5', '使用說明.docx'] 
+                file=['EA.ex5', '使用教學.docx'] 
             )
             print(f"✅ 已發貨給用戶: {event.sender_id}")
             
@@ -129,4 +129,5 @@ async def check_signal():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
