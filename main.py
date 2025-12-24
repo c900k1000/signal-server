@@ -6,95 +6,82 @@ from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 import uvicorn
 
-# ================= 環境變數讀取 =================
-# 這些變數會從 Render 的 Environment Variables 讀取
+# ================= 設定區 =================
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
-# 目標群組 ID (請確認 Render 上填寫的是 -100 開頭的整數)
 TARGET_GROUP_ID = int(os.environ.get("GROUP_ID")) 
 
 app = FastAPI()
 client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 
-# 訊號暫存區 (全域變數)
+# 訊號結構
 current_signal = {
     "id": 0,
     "action": "",
-    "symbol": "XAUUSD",
+    "symbol": "",      
+    "entry": 0.0,
     "sl": 0.0,
-    "tp": 0.0,  # 這裡會存抓到的 TP4
-    "msg": ""
+    "tp": 0.0
 }
 
-# ================= 核心：文字解析邏輯 (Regex) =================
+# ================= 解析邏輯 =================
 def parse_signal(text):
-    text = text.lower() # 轉小寫方便比對
-    data = {"action": "", "sl": 0.0, "tp": 0.0}
+    text = text.upper()
+    data = {"action": "", "symbol": "", "entry": 0.0, "sl": 0.0, "tp": 0.0}
     
-    # 1. 判斷方向
-    if "buy" in text or "做多" in text:
-        data["action"] = "buy"
-    elif "sell" in text or "做空" in text:
-        data["action"] = "sell"
-    elif "close" in text or "平倉" in text:
-        data["action"] = "close_all"
+    # 1. 抓取方向
+    if "BUY" in text or "做多" in text: data["action"] = "buy"
+    elif "SELL" in text or "做空" in text: data["action"] = "sell"
+    elif "CLOSE" in text or "平倉" in text: data["action"] = "close_all"
+    
+    if not data["action"]: return None
 
-    # 如果沒抓到方向，就視為無效訊號
-    if not data["action"]:
-        return None
+    # 2. 抓取商品 (Symbol)
+    # 邏輯: 尋找 "SELL XAUUSD" 或 "BUY EURUSD"
+    # 我們這裡稍微放寬一點，只要有 [英文+數字] 跟在動作後面就抓
+    entry_match = re.search(r"(BUY|SELL)\s+([A-Z0-9]+)", text)
+    
+    if entry_match:
+        data["symbol"] = entry_match.group(2) # 例如 XAUUSD
+    else:
+        data["symbol"] = "XAUUSD" # 預設值
 
-    # 2. 抓取止損 (SL)
-    # 邏輯：尋找 "sl" 關鍵字，忽略中間的非數字字符，抓取後面的浮點數
-    sl_match = re.search(r"sl\D*(\d+(\.\d+)?)", text)
-    if sl_match:
-        data["sl"] = float(sl_match.group(1))
+    # 3. 抓取 SL (止損)
+    sl_match = re.search(r"SL\D*(\d+(\.\d+)?)", text)
+    if sl_match: data["sl"] = float(sl_match.group(1))
 
-    # 3. 抓取止盈 (優先順序: TP4 -> TP3 -> TP2 -> TP1)
-    # 我們倒著找，先找 tp4，找到就停止
+    # 4. 抓取 TP (優先抓 TP4)
     for i in range(4, 0, -1):
-        tp_key = f"tp{i}"
-        tp_match = re.search(rf"{tp_key}\D*(\d+(\.\d+)?)", text)
+        tp_match = re.search(rf"TP{i}\D*(\d+(\.\d+)?)", text)
         if tp_match:
             data["tp"] = float(tp_match.group(1))
-            print(f"✅ 成功抓到 {tp_key}: {data['tp']}")
             break 
             
     return data
 
-# ================= 監聽事件 =================
 @client.on(events.NewMessage())
 async def handler(event):
-    # --- 🕵️ 除錯模式：什麼都聽，什麼都印 ---
+    # if event.chat_id != TARGET_GROUP_ID: return # 正式上線請打開這行
+
     text = event.raw_text
-    chat_id = event.chat_id
+    print(f"收到訊號: {text}")
     
-    print(f"========================================")
-    print(f"📢 聽到訊息了！")
-    print(f"來源群組 ID: {chat_id}")  # 👈 關鍵！請看這裡印出什麼數字
-    print(f"內容: {text[:50]}...")   # 印出前50個字
-    
-    # 解析訊息
     result = parse_signal(text)
     
-    if result:
-        # 不管 ID 對不對，只要格式對了先廣播 (方便測試)
+    # 只要有動作就廣播 (不需要檢查 entry 價格了，因為我們是市價進場)
+    if result and result["action"]: 
         current_signal["id"] = int(time.time() * 1000)
         current_signal["action"] = result["action"]
+        current_signal["symbol"] = result["symbol"]
         current_signal["sl"] = result["sl"]
         current_signal["tp"] = result["tp"]
         
-        print(f"✅ 解析成功！準備下單：{result['action']} | SL:{result['sl']} | TP:{result['tp']}")
-    else:
-        print(f"❌ 格式不符 (Regex沒抓到)")
-    
-    print(f"========================================")
+        print(f"🚀 市價單訊號: {result['symbol']} {result['action']} | SL:{result['sl']} TP:{result['tp']}")
 
-# ================= 系統啟動與 API =================
 @app.on_event("startup")
 async def startup_event():
     await client.start()
-    print("✅ Telegram 監聽器已啟動，等待訊號...")
 
 @app.get("/check_signal")
 async def check_signal():
@@ -102,6 +89,4 @@ async def check_signal():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    # 必須使用 uvicorn 啟動
     uvicorn.run(app, host="0.0.0.0", port=port)
-
