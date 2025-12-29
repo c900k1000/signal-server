@@ -10,13 +10,14 @@ import uvicorn
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
-# 目標群組 ID (建議填入，只監聽特定群組)
+
+# 🔥 修正重點：這裡強制讀取 GROUP_ID，沒有填會報錯，確保一定有監控目標
 TARGET_GROUP_ID = int(os.environ.get("GROUP_ID")) 
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SECRET_PASS = os.environ.get("SECRET_PASS")
 
-# 🔥 設定訊號有效時間 (秒) - 超過 5 分鐘的訊號視為過期
+# 設定訊號有效時間 (秒) - 超過 5 分鐘的訊號視為過期
 SIGNAL_TIMEOUT = 300 
 
 app = FastAPI()
@@ -32,7 +33,6 @@ current_signal = {
 }
 
 # 📒 授權帳本 (結構: { "tg_user_id": "mt5_account" })
-# 注意：Render 重啟後會清空，若需永久保存需接資料庫，目前為記憶體暫存
 authorized_users = {}
 
 # ================= A: 間諜監聽邏輯 (解析 TP1-TP4) =================
@@ -69,8 +69,9 @@ def parse_signal(text):
 
 @spy_client.on(events.NewMessage())
 async def spy_handler(event):
-    # 過濾群組
-    if TARGET_GROUP_ID and event.chat_id != TARGET_GROUP_ID: return
+    # 🔥 修正重點：嚴格過濾！只有目標群組的訊息才會被處理
+    # 如果訊息來源 ID 不等於 環境變數裡的 GROUP_ID，直接忽略
+    if event.chat_id != TARGET_GROUP_ID: return
 
     text = event.raw_text
     result = parse_signal(text)
@@ -85,7 +86,7 @@ async def spy_handler(event):
         current_signal["tp3"] = result["tp3"]
         current_signal["tp4"] = result["tp4"]
         
-        print(f"🚀 廣播訊號: {result['symbol']} {result['action']} | TP1:{result['tp1']} ... TP4:{result['tp4']}")
+        print(f"🚀 [群組 {event.chat_id}] 廣播訊號: {result['symbol']} {result['action']} | TP1:{result['tp1']} ... TP4:{result['tp4']}")
 
 # ================= B: 發貨機器人 + 綁定邏輯 =================
 
@@ -102,7 +103,7 @@ async def start_handler(event):
     )
     await event.respond(msg)
 
-# --- 新增：帳號綁定功能 ---
+# --- 帳號綁定功能 ---
 @bot_client.on(events.NewMessage(pattern='/bind'))
 async def bind_handler(event):
     if not event.is_private: return
@@ -139,6 +140,7 @@ async def password_check(event):
     if msg == SECRET_PASS:
         await event.respond("✅ 密碼正確！正在發送檔案...")
         
+        # ⚠️ 請確保 GitHub 上有這兩個檔案 (使用教學.pdf)
         files = ['EA.ex5', '使用教學.pdf'] 
         existing_files = [f for f in files if os.path.exists(f)]
 
@@ -158,13 +160,13 @@ async def password_check(event):
 
 @app.get("/check_signal")
 async def check_signal():
-    # 🔥 關鍵修改：檢查訊號是否過期
+    # 檢查訊號是否過期
     now = int(time.time() * 1000)
     signal_time = current_signal["id"]
     
     # 如果訊號產生超過 SIGNAL_TIMEOUT (例如 300秒)
     if (now - signal_time) > (SIGNAL_TIMEOUT * 1000):
-        # 回傳空訊號，讓 EA 知道沒單可下
+        # 回傳空訊號
         return {
             "has_signal": False, 
             "data": {
@@ -177,11 +179,9 @@ async def check_signal():
 
     return {"has_signal": True, "data": current_signal}
 
-# 新增：雲端授權檢查接口 (配合 /bind 使用)
 @app.get("/check_license")
 async def check_license(account: str):
     all_allowed = list(authorized_users.values())
-    # 這裡可以加入您的 VIP 白名單
     vip_accounts = ["50057009", "123456"] 
     
     if account in all_allowed or account in vip_accounts:
@@ -194,7 +194,7 @@ async def check_license(account: str):
 async def startup_event():
     await spy_client.start()
     await bot_client.start(bot_token=BOT_TOKEN)
-    print("✅ 系統全開 (監聽 + 發貨 + 雲端驗證 + 過期濾除)")
+    print(f"✅ 系統全開 | 正在監聽群組 ID: {TARGET_GROUP_ID}")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
