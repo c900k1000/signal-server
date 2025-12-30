@@ -6,13 +6,14 @@ from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 import uvicorn
 
-# ================= 環境變數 =================
+# ================= 環境變數設定 =================
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 
-# ❌ 移除 GROUP_ID 讀取，避免任何設定錯誤導致當機
-# TARGET_GROUP_ID = ... (直接註解掉)
+# 🔥 關鍵修正：直接把正確的 ID 寫死在這裡！
+# 這樣機器人就只會聽這個群組，您跟朋友聊天它會自動忽略
+TARGET_GROUP_ID = -1003006310733
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SECRET_PASS = os.environ.get("SECRET_PASS")
@@ -29,7 +30,7 @@ current_signal = {
 }
 authorized_users = {}
 
-# ================= A: 間諜監聽 (無差別接收) =================
+# ================= A: 間諜監聽邏輯 =================
 def parse_signal(text):
     text = text.upper()
     data = {
@@ -58,9 +59,14 @@ def parse_signal(text):
 
 @spy_client.on(events.NewMessage())
 async def spy_handler(event):
-    # 🔥 關鍵修改：移除所有 ID 判斷，什麼都印出來！
-    print(f"👂 收到訊息 | 來源 ID: {event.chat_id} | 內容片段: {event.raw_text[:20]}...")
+    # 🔥 過濾器啟動：如果不是目標群組，直接忽略！
+    if event.chat_id != TARGET_GROUP_ID:
+        # print(f"忽略非目標訊息 ID: {event.chat_id}") # 若不想看雜訊 Logs 可註解掉
+        return
 
+    # 只有通過上面檢查的，才會執行下面這段
+    print(f"👂 收到目標群組訊息！內容: {event.raw_text[:20]}...")
+    
     text = event.raw_text
     result = parse_signal(text)
     
@@ -76,7 +82,7 @@ async def spy_handler(event):
         
         print(f"🚀 廣播訊號: {result['symbol']} {result['action']} | TP1:{result['tp1']} ...")
 
-# ================= B: 機器人與 API (保持不變) =================
+# ================= B: 發貨機器人 (維持不變) =================
 handled_messages = set() 
 
 @bot_client.on(events.NewMessage(pattern='/start'))
@@ -140,7 +146,7 @@ async def check_license(account: str):
 async def startup_event():
     await spy_client.start()
     await bot_client.start(bot_token=BOT_TOKEN)
-    print("✅ 系統全開 (無過濾模式 - 絕對接收)")
+    print(f"✅ 系統啟動 | 鎖定監聽群組: {TARGET_GROUP_ID}")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
