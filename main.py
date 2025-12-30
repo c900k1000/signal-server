@@ -13,7 +13,7 @@ SESSION_STRING = os.environ.get("SESSION_STRING")
 
 # 🔥 關鍵修正：直接把正確的 ID 寫死在這裡！
 # 這樣機器人就只會聽這個群組，您跟朋友聊天它會自動忽略
-TARGET_GROUP_ID = -1003006310733
+TARGET_GROUP_ID = -3006310733
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SECRET_PASS = os.environ.get("SECRET_PASS")
@@ -151,3 +151,4 @@ async def startup_event():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
