@@ -6,13 +6,14 @@ from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 import uvicorn
 
-# ================= 環境變數 =================
+# ================= 環境變數設定 =================
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 
-
- TARGET_GROUP_ID = -1003006310733
+# 🔥🔥🔥 請在這裡填入您剛剛在 Logs 看到的那串 ID！ 🔥🔥🔥
+# 例如: TARGET_GROUP_ID = -1003006310733
+TARGET_GROUP_ID = -1003006310733  # <--- 請修改這裡
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SECRET_PASS = os.environ.get("SECRET_PASS")
@@ -29,7 +30,7 @@ current_signal = {
 }
 authorized_users = {}
 
-# ================= A: 間諜監聽 (無差別接收除錯版) =================
+# ================= A: 間諜監聽邏輯 =================
 def parse_signal(text):
     text = text.upper()
     data = {
@@ -58,15 +59,12 @@ def parse_signal(text):
 
 @spy_client.on(events.NewMessage())
 async def spy_handler(event):
-    # 🔥🔥🔥 除錯關鍵：無論是誰傳的，全部印出來！ 🔥🔥🔥
-    print(f"========================================")
-    print(f"👂 聽到聲音了！")
-    print(f"🆔 來源 ID: {event.chat_id}") 
-    print(f"👤 發送者 ID: {event.sender_id}")
-    print(f"💬 內容: {event.raw_text}")
-    print(f"========================================")
+    # 🔥 過濾器已啟動：只聽目標群組，朋友聊天全部忽略！
+    if event.chat_id != TARGET_GROUP_ID:
+        # print(f"忽略雜訊 ID: {event.chat_id}") 
+        return
 
-    # (這裡原本有過濾器，現在拔掉了，只要有訊號就廣播)
+    print(f"👂 收到目標訊號！內容: {event.raw_text[:20]}...")
     
     text = event.raw_text
     result = parse_signal(text)
@@ -83,7 +81,7 @@ async def spy_handler(event):
         
         print(f"🚀 廣播訊號: {result['symbol']} {result['action']} | TP1:{result['tp1']}")
 
-# ================= B: 機器人與 API (保持不變) =================
+# ================= B: 發貨機器人 (維持不變) =================
 handled_messages = set() 
 
 @bot_client.on(events.NewMessage(pattern='/start'))
@@ -116,7 +114,7 @@ async def password_check(event):
 
     if msg == SECRET_PASS:
         await event.respond("✅ 密碼正確！正在發送檔案...")
-        files = ['EA.ex5', 'Manual.pdf'] 
+        files = ['EA.ex5', '使用教學.pdf'] 
         existing_files = [f for f in files if os.path.exists(f)]
         if existing_files:
             try:
@@ -147,10 +145,8 @@ async def check_license(account: str):
 async def startup_event():
     await spy_client.start()
     await bot_client.start(bot_token=BOT_TOKEN)
-    print("✅ 系統全開 (上帝模式 - 什麼都聽)")
+    print(f"✅ 系統啟動 | 已鎖定唯一群組: {TARGET_GROUP_ID}")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
-
-
