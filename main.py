@@ -11,9 +11,9 @@ API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 
-# 🔥🔥🔥 請在這裡填入您剛剛在 Logs 看到的那串 ID！ 🔥🔥🔥
-# 例如: TARGET_GROUP_ID = -1003006310733
-TARGET_GROUP_ID = -1002249680342  # <--- 請修改這裡
+# 🔥 請在此填入【新群組】的 ID (舊的 ID 就會被過濾掉)
+# 務必確認 ID 是 -100 開頭的正確格式
+TARGET_GROUP_ID = -1002249680342  # <--- 請修改這裡為新群組 ID
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SECRET_PASS = os.environ.get("SECRET_PASS")
@@ -59,12 +59,14 @@ def parse_signal(text):
 
 @spy_client.on(events.NewMessage())
 async def spy_handler(event):
-    # 🔥 過濾器已啟動：只聽目標群組，朋友聊天全部忽略！
+    # 🔥🔥🔥 超級嚴格過濾器 🔥🔥🔥
+    # 這行放在最最最前面！
+    # 只要 ID 不對，立刻停止 (return)，連 Log 都不會印出來
     if event.chat_id != TARGET_GROUP_ID:
-        # print(f"忽略雜訊 ID: {event.chat_id}") 
         return
 
-    print(f"👂 收到目標訊號！內容: {event.raw_text[:20]}...")
+    # 只有通過上面檢查的「新群組訊息」，才會執行到這裡
+    print(f"👂 收到新群組訊號！內容: {event.raw_text[:20]}...")
     
     text = event.raw_text
     result = parse_signal(text)
@@ -145,9 +147,8 @@ async def check_license(account: str):
 async def startup_event():
     await spy_client.start()
     await bot_client.start(bot_token=BOT_TOKEN)
-    print(f"✅ 系統啟動 | 已鎖定唯一群組: {TARGET_GROUP_ID}")
+    print(f"✅ 系統啟動 | 已鎖定新群組: {TARGET_GROUP_ID}")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
-
