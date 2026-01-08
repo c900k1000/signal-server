@@ -13,7 +13,7 @@ SESSION_STRING = os.environ.get("SESSION_STRING")
 
 # 🔥🔥🔥 請在這裡填入您剛剛在 Logs 看到的那串 ID！ 🔥🔥🔥
 # 例如: TARGET_GROUP_ID = -1003006310733
-TARGET_GROUP_ID = -1003006310733  # <--- 請修改這裡
+TARGET_GROUP_ID = -1002249680342  # <--- 請修改這裡
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SECRET_PASS = os.environ.get("SECRET_PASS")
@@ -150,3 +150,4 @@ async def startup_event():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
