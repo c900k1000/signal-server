@@ -8,12 +8,11 @@ import uvicorn
 
 # ================= 環境變數設定 =================
 API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH"))
+API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 
-# 🔥🔥🔥 請在此填入您要鎖定的群組 ID 🔥🔥🔥
-# 格式通常是 -100 開頭
-TARGET_GROUP_ID = -1002249680342 
+# 🔥🔥🔥 這裡已經幫您改成【新群組 ID】了 🔥🔥🔥
+TARGET_GROUP_ID = -1002249680342
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SECRET_PASS = os.environ.get("SECRET_PASS")
@@ -30,7 +29,7 @@ current_signal = {
 }
 authorized_users = {}
 
-# ================= A: 間諜監聽邏輯 =================
+# ================= A: 訊號解析邏輯 =================
 def parse_signal(text):
     text = text.upper()
     data = {
@@ -59,17 +58,13 @@ def parse_signal(text):
 
 @spy_client.on(events.NewMessage())
 async def spy_handler(event):
-    # 🔥🔥🔥 嚴格過濾 + 警示日誌 🔥🔥🔥
-    
-    # 1. 檢查 ID 是否符合
+    # 🛑 門神過濾器 🛑
+    # 這行最重要！只要 ID 不對，直接 return，連 Log 都不會印！
     if event.chat_id != TARGET_GROUP_ID:
-        # 如果不符合，印出警示 Log，讓您知道是誰在發訊息
-        print(f"⛔ [攔截] 非指定來源 | 來源ID: {event.chat_id} | 內容: {event.raw_text[:10]}...")
-        # 直接結束，不處理訊號 -> EA 就不會收到
-        return
+        return 
 
-    # 2. 如果 ID 符合，才執行下面這段
-    print(f"✅ [通過] 收到目標訊號 | 來源ID: {event.chat_id} | 準備廣播...")
+    # --- 只有新群組 (-1002249680342) 的訊息能通過這裡 ---
+    print(f"✅ 收到新群組訊號！準備處理...")
     
     text = event.raw_text
     result = parse_signal(text)
@@ -84,9 +79,9 @@ async def spy_handler(event):
         current_signal["tp3"] = result["tp3"]
         current_signal["tp4"] = result["tp4"]
         
-        print(f"🚀 廣播訊號成功: {result['symbol']} {result['action']} | TP1:{result['tp1']}")
+        print(f"🚀 廣播訊號: {result['symbol']} {result['action']} | TP1:{result['tp1']}")
 
-# ================= B: 發貨機器人 =================
+# ================= B: 發貨機器人 (維持不變) =================
 handled_messages = set() 
 
 @bot_client.on(events.NewMessage(pattern='/start'))
@@ -150,7 +145,7 @@ async def check_license(account: str):
 async def startup_event():
     await spy_client.start()
     await bot_client.start(bot_token=BOT_TOKEN)
-    print(f"✅ 系統啟動 | 已鎖定唯一群組: {TARGET_GROUP_ID}")
+    print(f"✅ 系統啟動 | 只監聽新群組: {TARGET_GROUP_ID}")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
