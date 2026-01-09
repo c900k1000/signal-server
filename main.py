@@ -6,18 +6,18 @@ from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 import uvicorn
 
-# ================= 環境變數 =================
+# ================= 環境變數設定 =================
 API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH")
+API_HASH = os.environ.get("API_HASH"))
 SESSION_STRING = os.environ.get("SESSION_STRING")
+
+# 🔥🔥🔥 請在此填入您要鎖定的群組 ID 🔥🔥🔥
+# 格式通常是 -100 開頭
+TARGET_GROUP_ID = -1002249680342 
+
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SECRET_PASS = os.environ.get("SECRET_PASS")
-
-# ⚠️ 暫時取消過濾，為了抓出新群組的正確 ID
-# TARGET_GROUP_ID = ... 
-
-# ⚠️ 暫時把過期時間拉長到 1 小時，確保測試能成功
-SIGNAL_TIMEOUT = 3600 
+SIGNAL_TIMEOUT = 300 
 
 app = FastAPI()
 
@@ -30,7 +30,7 @@ current_signal = {
 }
 authorized_users = {}
 
-# ================= A: 訊號解析 =================
+# ================= A: 間諜監聽邏輯 =================
 def parse_signal(text):
     text = text.upper()
     data = {
@@ -59,15 +59,20 @@ def parse_signal(text):
 
 @spy_client.on(events.NewMessage())
 async def spy_handler(event):
-    # 🔥🔥🔥 這裡是關鍵！印出所有聽到的 ID 🔥🔥🔥
-    print(f"========== 收到訊息 ==========")
-    print(f"群組名稱: {event.chat.title if hasattr(event.chat, 'title') else '私訊'}")
-    print(f"真實 ID (請複製這個): {event.chat_id}")
-    print(f"內容: {event.raw_text[:30]}...")
-    print(f"==============================")
+    # 🔥🔥🔥 嚴格過濾 + 警示日誌 🔥🔥🔥
+    
+    # 1. 檢查 ID 是否符合
+    if event.chat_id != TARGET_GROUP_ID:
+        # 如果不符合，印出警示 Log，讓您知道是誰在發訊息
+        print(f"⛔ [攔截] 非指定來源 | 來源ID: {event.chat_id} | 內容: {event.raw_text[:10]}...")
+        # 直接結束，不處理訊號 -> EA 就不會收到
+        return
 
-    # 不過濾，直接處理
-    result = parse_signal(event.raw_text)
+    # 2. 如果 ID 符合，才執行下面這段
+    print(f"✅ [通過] 收到目標訊號 | 來源ID: {event.chat_id} | 準備廣播...")
+    
+    text = event.raw_text
+    result = parse_signal(text)
     
     if result and result["action"]:
         current_signal["id"] = int(time.time() * 1000)
@@ -79,9 +84,9 @@ async def spy_handler(event):
         current_signal["tp3"] = result["tp3"]
         current_signal["tp4"] = result["tp4"]
         
-        print(f"✅ 訊號已更新！EA 現在應該要下單了: {result['action']} {result['symbol']}")
+        print(f"🚀 廣播訊號成功: {result['symbol']} {result['action']} | TP1:{result['tp1']}")
 
-# ================= B: 機器人 (維持不變) =================
+# ================= B: 發貨機器人 =================
 handled_messages = set() 
 
 @bot_client.on(events.NewMessage(pattern='/start'))
@@ -131,7 +136,6 @@ async def check_signal():
     now = int(time.time() * 1000)
     signal_time = current_signal["id"]
     if (now - signal_time) > (SIGNAL_TIMEOUT * 1000):
-        # 超時回傳空
         return {"has_signal": False, "data": {"id": current_signal["id"], "action": "", "symbol": "", "tp1": 0, "tp4": 0}}
     return {"has_signal": True, "data": current_signal}
 
@@ -146,7 +150,7 @@ async def check_license(account: str):
 async def startup_event():
     await spy_client.start()
     await bot_client.start(bot_token=BOT_TOKEN)
-    print("✅ 系統全開 | 無過濾模式 | 等待新群組訊號...")
+    print(f"✅ 系統啟動 | 已鎖定唯一群組: {TARGET_GROUP_ID}")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
