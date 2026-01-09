@@ -11,8 +11,9 @@ API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 
-# 🔥🔥🔥 這裡已經幫您改成【新群組 ID】了 🔥🔥🔥
-TARGET_GROUP_ID = -1002249680342
+# 🔥🔥🔥 設定區 (請確認這裡的數字沒錯) 🔥🔥🔥
+NEW_GROUP_ID = -1002249680342  # ✅ 新歡 (只聽這個)
+OLD_GROUP_ID = -1003006310733  # ❌ 舊愛 (絕對封殺)
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SECRET_PASS = os.environ.get("SECRET_PASS")
@@ -58,13 +59,22 @@ def parse_signal(text):
 
 @spy_client.on(events.NewMessage())
 async def spy_handler(event):
-    # 🛑 門神過濾器 🛑
-    # 這行最重要！只要 ID 不對，直接 return，連 Log 都不會印！
-    if event.chat_id != TARGET_GROUP_ID:
+    # 🔍 抓鬼偵測：把每個聽到的 ID 都印出來，看看是誰在吵
+    incoming_id = event.chat_id
+    
+    # 🛑 第一道防線：明確封殺舊群組
+    if incoming_id == OLD_GROUP_ID:
+        print(f"⛔ [封殺] 攔截到舊群組訊息！ID: {incoming_id} (已忽略)")
+        return
+
+    # 🛑 第二道防線：只允許新群組
+    if incoming_id != NEW_GROUP_ID:
+        # 這裡會印出所有非目標的 ID (包含朋友私訊)
+        # print(f"👻 [忽略] 非目標來源 ID: {incoming_id}") 
         return 
 
-    # --- 只有新群組 (-1002249680342) 的訊息能通過這裡 ---
-    print(f"✅ 收到新群組訊號！準備處理...")
+    # --- 只有通過上面兩道防線，才會執行下面 ---
+    print(f"✅ [通過] 收到新群組訊號！ID: {incoming_id}")
     
     text = event.raw_text
     result = parse_signal(text)
@@ -81,7 +91,7 @@ async def spy_handler(event):
         
         print(f"🚀 廣播訊號: {result['symbol']} {result['action']} | TP1:{result['tp1']}")
 
-# ================= B: 發貨機器人 (維持不變) =================
+# ================= B: 發貨機器人 =================
 handled_messages = set() 
 
 @bot_client.on(events.NewMessage(pattern='/start'))
@@ -145,7 +155,12 @@ async def check_license(account: str):
 async def startup_event():
     await spy_client.start()
     await bot_client.start(bot_token=BOT_TOKEN)
-    print(f"✅ 系統啟動 | 只監聽新群組: {TARGET_GROUP_ID}")
+    # 🔥 這裡會在 Render Log 一開始印出來，請檢查這行！
+    print("========================================")
+    print(f"✅ 系統啟動中...")
+    print(f"🎯 目標群組 (New): {NEW_GROUP_ID}")
+    print(f"⛔ 封殺群組 (Old): {OLD_GROUP_ID}")
+    print("========================================")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
