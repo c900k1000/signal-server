@@ -11,9 +11,12 @@ API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 
-# 🔥🔥🔥 設定區 (請確認這裡的數字沒錯) 🔥🔥🔥
-NEW_GROUP_ID = -1002249680342  # ✅ 新歡 (只聽這個)
-OLD_GROUP_ID = -1003006310733  # ❌ 舊愛 (絕對封殺)
+# 🔥🔥🔥 設定雙群組 ID 與對應商品 🔥🔥🔥
+# 格式： { 群組ID : "商品名稱" }
+GROUP_CONFIG = {
+    -1002249680342: "XAUUSD",   # 🏆 原本的黃金群
+    -1003307050368: "BTCUSD"    # ₿  新的 BTC 群組
+}
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SECRET_PASS = os.environ.get("SECRET_PASS")
@@ -30,26 +33,35 @@ current_signal = {
 }
 authorized_users = {}
 
-# ================= A: 訊號解析邏輯 =================
-def parse_signal(text):
+# ================= A: 訊號解析邏輯 (支援自動商品識別) =================
+def parse_signal(text, default_symbol):
     text = text.upper()
     data = {
-        "action": "", "symbol": "XAUUSD", "entry": 0.0, "sl": 0.0,
+        "action": "", "symbol": default_symbol, # 🔥 這裡會使用群組對應的預設商品
+        "entry": 0.0, "sl": 0.0,
         "tp1": 0.0, "tp2": 0.0, "tp3": 0.0, "tp4": 0.0
     }
     
+    # 判斷方向
     if "BUY" in text or "做多" in text: data["action"] = "buy"
     elif "SELL" in text or "做空" in text: data["action"] = "sell"
     elif "CLOSE" in text: data["action"] = "close_all"
     
     if not data["action"]: return None
     
+    # 如果訊號文字裡面有指定商品 (例如 "BUY ETHUSD")，則覆蓋預設值
     entry_match = re.search(r"(BUY|SELL)\s+([A-Z0-9]+)", text)
-    if entry_match: data["symbol"] = entry_match.group(2)
+    if entry_match: 
+        found_symbol = entry_match.group(2)
+        # 簡單過濾，避免把價格當成商品
+        if len(found_symbol) > 2 and not found_symbol[0].isdigit():
+            data["symbol"] = found_symbol
     
+    # 抓取 SL
     sl_match = re.search(r"SL\D*(\d+(\.\d+)?)", text)
     if sl_match: data["sl"] = float(sl_match.group(1))
     
+    # 抓取 TP1~TP4
     for i in range(1, 5):
         tp_key = f"tp{i}"
         tp_match = re.search(rf"TP{i}\D*(\d+(\.\d+)?)", text)
@@ -59,25 +71,23 @@ def parse_signal(text):
 
 @spy_client.on(events.NewMessage())
 async def spy_handler(event):
-    # 🔍 抓鬼偵測：把每個聽到的 ID 都印出來，看看是誰在吵
     incoming_id = event.chat_id
-    
-    # 🛑 第一道防線：明確封殺舊群組
-    if incoming_id == OLD_GROUP_ID:
-        print(f"⛔ [封殺] 攔截到舊群組訊息！ID: {incoming_id} (已忽略)")
-        return
+    default_sym = ""
+    group_name = ""
 
-    # 🛑 第二道防線：只允許新群組
-    if incoming_id != NEW_GROUP_ID:
-        # 這裡會印出所有非目標的 ID (包含朋友私訊)
-        # print(f"👻 [忽略] 非目標來源 ID: {incoming_id}") 
+    # 🛑 門神判斷：只處理我們列管的群組 🛑
+    if incoming_id in GROUP_CONFIG:
+        default_sym = GROUP_CONFIG[incoming_id]
+        group_name = "黃金群" if default_sym == "XAUUSD" else "BTC群"
+    else:
+        # 不是這兩個群組的，直接忽略 (包含舊群組也會被忽略)
         return 
 
-    # --- 只有通過上面兩道防線，才會執行下面 ---
-    print(f"✅ [通過] 收到新群組訊號！ID: {incoming_id}")
+    print(f"✅ 收到 [{group_name}] 訊號！準備解析...")
     
     text = event.raw_text
-    result = parse_signal(text)
+    # 將對應的預設商品傳進去
+    result = parse_signal(text, default_sym)
     
     if result and result["action"]:
         current_signal["id"] = int(time.time() * 1000)
@@ -91,7 +101,7 @@ async def spy_handler(event):
         
         print(f"🚀 廣播訊號: {result['symbol']} {result['action']} | TP1:{result['tp1']}")
 
-# ================= B: 發貨機器人 =================
+# ================= B: 發貨機器人 (維持不變) =================
 handled_messages = set() 
 
 @bot_client.on(events.NewMessage(pattern='/start'))
@@ -155,11 +165,9 @@ async def check_license(account: str):
 async def startup_event():
     await spy_client.start()
     await bot_client.start(bot_token=BOT_TOKEN)
-    # 🔥 這裡會在 Render Log 一開始印出來，請檢查這行！
     print("========================================")
-    print(f"✅ 系統啟動中...")
-    print(f"🎯 目標群組 (New): {NEW_GROUP_ID}")
-    print(f"⛔ 封殺群組 (Old): {OLD_GROUP_ID}")
+    print(f"✅ 雙核心系統啟動中...")
+    print(f"📋 監聽清單: {GROUP_CONFIG}")
     print("========================================")
 
 if __name__ == "__main__":
