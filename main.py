@@ -160,7 +160,7 @@ async def check_license(account: str):
     vip_accounts = ["50057009", "123456"] 
     if account in all_allowed or account in vip_accounts: return {"allowed": True}
     else: return {"allowed": False}
-
+await spy_client.get_dialogs()
 @app.on_event("startup")
 async def startup_event():
     await spy_client.start()
@@ -173,3 +173,4 @@ async def startup_event():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port, access_log=False)
+
