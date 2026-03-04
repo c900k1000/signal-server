@@ -12,7 +12,6 @@ API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 
 # 🔥🔥🔥 設定雙群組 ID 與對應商品 🔥🔥🔥
-# 格式： { 群組ID : "商品名稱" }
 GROUP_CONFIG = {
     -1002249680342: "XAUUSD",   # 🏆 原本的黃金群
     -1003307050368: "BTCUSD"    # ₿  新的 BTC 群組
@@ -33,35 +32,30 @@ current_signal = {
 }
 authorized_users = {}
 
-# ================= A: 訊號解析邏輯 (支援自動商品識別) =================
+# ================= A: 訊號解析邏輯 =================
 def parse_signal(text, default_symbol):
     text = text.upper()
     data = {
-        "action": "", "symbol": default_symbol, # 🔥 這裡會使用群組對應的預設商品
+        "action": "", "symbol": default_symbol,
         "entry": 0.0, "sl": 0.0,
         "tp1": 0.0, "tp2": 0.0, "tp3": 0.0, "tp4": 0.0
     }
     
-    # 判斷方向
     if "BUY" in text or "做多" in text: data["action"] = "buy"
     elif "SELL" in text or "做空" in text: data["action"] = "sell"
     elif "CLOSE" in text: data["action"] = "close_all"
     
     if not data["action"]: return None
     
-    # 如果訊號文字裡面有指定商品 (例如 "BUY ETHUSD")，則覆蓋預設值
     entry_match = re.search(r"(BUY|SELL)\s+([A-Z0-9]+)", text)
     if entry_match: 
         found_symbol = entry_match.group(2)
-        # 簡單過濾，避免把價格當成商品
         if len(found_symbol) > 2 and not found_symbol[0].isdigit():
             data["symbol"] = found_symbol
     
-    # 抓取 SL
     sl_match = re.search(r"SL\D*(\d+(\.\d+)?)", text)
     if sl_match: data["sl"] = float(sl_match.group(1))
     
-    # 抓取 TP1~TP4
     for i in range(1, 5):
         tp_key = f"tp{i}"
         tp_match = re.search(rf"TP{i}\D*(\d+(\.\d+)?)", text)
@@ -75,18 +69,15 @@ async def spy_handler(event):
     default_sym = ""
     group_name = ""
 
-    # 🛑 門神判斷：只處理我們列管的群組 🛑
     if incoming_id in GROUP_CONFIG:
         default_sym = GROUP_CONFIG[incoming_id]
         group_name = "黃金群" if default_sym == "XAUUSD" else "BTC群"
     else:
-        # 不是這兩個群組的，直接忽略 (包含舊群組也會被忽略)
         return 
 
     print(f"✅ 收到 [{group_name}] 訊號！準備解析...")
     
     text = event.raw_text
-    # 將對應的預設商品傳進去
     result = parse_signal(text, default_sym)
     
     if result and result["action"]:
@@ -101,7 +92,7 @@ async def spy_handler(event):
         
         print(f"🚀 廣播訊號: {result['symbol']} {result['action']} | TP1:{result['tp1']}")
 
-# ================= B: 發貨機器人 (維持不變) =================
+# ================= B: 發貨機器人 =================
 handled_messages = set() 
 
 @bot_client.on(events.NewMessage(pattern='/start'))
@@ -146,6 +137,15 @@ async def password_check(event):
     else:
         await event.respond("❌ 密碼錯誤")
 
+# 🔥 剛剛被不小心刪掉的廣播電台，我補回來了！
+@app.get("/check_signal")
+async def check_signal():
+    now = int(time.time() * 1000)
+    signal_time = current_signal["id"]
+    if (now - signal_time) > (SIGNAL_TIMEOUT * 1000):
+        return {"has_signal": False, "data": {"id": current_signal["id"], "action": "", "symbol": "", "tp1": 0, "tp4": 0}}
+    return {"has_signal": True, "data": current_signal}
+
 @app.get("/check_license")
 async def check_license(account: str):
     all_allowed = list(authorized_users.values())
@@ -156,10 +156,7 @@ async def check_license(account: str):
 @app.on_event("startup")
 async def startup_event():
     await spy_client.start()
-    
-    # 🔥 關鍵：強迫大腦讀取群組通訊錄 (已確認縮排正確)
-    await spy_client.get_dialogs() 
-    
+    await spy_client.get_dialogs() # 🔥 解決大腦變聾子的關鍵代碼
     await bot_client.start(bot_token=BOT_TOKEN)
     print("========================================")
     print(f"✅ 雙核心系統啟動中...")
@@ -169,6 +166,3 @@ async def startup_event():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port, access_log=False)
-
-
-
