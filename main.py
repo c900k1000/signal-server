@@ -146,14 +146,6 @@ async def password_check(event):
     else:
         await event.respond("❌ 密碼錯誤")
 
-@app.get("/check_signal")
-async def check_signal():
-    now = int(time.time() * 1000)
-    signal_time = current_signal["id"]
-    if (now - signal_time) > (SIGNAL_TIMEOUT * 1000):
-        return {"has_signal": False, "data": {"id": current_signal["id"], "action": "", "symbol": "", "tp1": 0, "tp4": 0}}
-    return {"has_signal": True, "data": current_signal}
-
 @app.get("/check_license")
 async def check_license(account: str):
     all_allowed = list(authorized_users.values())
@@ -164,7 +156,10 @@ async def check_license(account: str):
 @app.on_event("startup")
 async def startup_event():
     await spy_client.start()
-    await spy_client.get_dialogs()
+    
+    # 🔥 關鍵：強迫大腦讀取群組通訊錄 (已確認縮排正確)
+    await spy_client.get_dialogs() 
+    
     await bot_client.start(bot_token=BOT_TOKEN)
     print("========================================")
     print(f"✅ 雙核心系統啟動中...")
@@ -174,5 +169,6 @@ async def startup_event():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port, access_log=False)
+
 
 
