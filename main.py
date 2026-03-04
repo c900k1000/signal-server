@@ -164,6 +164,7 @@ await spy_client.get_dialogs()
 @app.on_event("startup")
 async def startup_event():
     await spy_client.start()
+    await spy_client.get_dialogs()
     await bot_client.start(bot_token=BOT_TOKEN)
     print("========================================")
     print(f"✅ 雙核心系統啟動中...")
