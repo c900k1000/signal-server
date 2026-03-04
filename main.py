@@ -99,14 +99,14 @@ handled_messages = set()
 async def start_handler(event):
     if not event.is_private: return
     sender = await event.get_sender()
-    await event.respond(f"👋 您好 {sender.first_name}！\n請輸入 **領取密碼** 或 **/bind 帳號**")
+    await event.respond(f"👋 您好 {sender.first_name}！\n請輸入 密碼 或 /bind 帳號")
 
 @bot_client.on(events.NewMessage(pattern='/bind'))
 async def bind_handler(event):
     if not event.is_private: return
     text = event.text.strip().split()
     if len(text) < 2:
-        await event.respond("❌ 格式錯誤！請輸入：`/bind 帳號`")
+        await event.respond("❌ 格式錯誤！請輸入：/bind 帳號")
         return
     authorized_users[str(event.sender_id)] = text[1]
     await event.respond(f"✅ 綁定成功: {text[1]}")
@@ -137,7 +137,6 @@ async def password_check(event):
     else:
         await event.respond("❌ 密碼錯誤")
 
-# 🔥 剛剛被不小心刪掉的廣播電台，我補回來了！
 @app.get("/check_signal")
 async def check_signal():
     now = int(time.time() * 1000)
@@ -156,7 +155,10 @@ async def check_license(account: str):
 @app.on_event("startup")
 async def startup_event():
     await spy_client.start()
-    await spy_client.get_dialogs() # 🔥 解決大腦變聾子的關鍵代碼
+    
+    # 🔥 解決大腦換鑰匙變聾子的關鍵代碼
+    await spy_client.get_dialogs() 
+    
     await bot_client.start(bot_token=BOT_TOKEN)
     print("========================================")
     print(f"✅ 雙核心系統啟動中...")
