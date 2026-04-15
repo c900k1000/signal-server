@@ -3,7 +3,7 @@ import time
 import re
 import logging
 logging.getLogger("uvicorn.access").disabled = True
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 import uvicorn
@@ -148,7 +148,10 @@ async def password_check(event):
         await event.respond("❌ 密碼錯誤")
 
 @app.get("/check_signal")
-async def check_signal():
+async def check_signal(response: Response):
+    # 🔥 告訴 Cloudflare：把結果暫存 1 秒鐘，這 1 秒內有 1 萬個 EA 來問，都直接發舊答案！
+    response.headers["Cache-Control"] = "public, max-age=1"
+
     now = int(time.time() * 1000)
     signal_time = current_signal["id"]
     if (now - signal_time) > (SIGNAL_TIMEOUT * 1000):
@@ -177,3 +180,7 @@ async def startup_event():
     print(f"✅ 雙核心系統啟動中...")
     print(f"📋 監聽清單: {GROUP_CONFIG}")
     print("========================================")
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port, access_log=False)
