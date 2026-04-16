@@ -20,7 +20,7 @@ GROUP_CONFIG = {
     -1003307050368: {"symbol": "BTCUSD", "channel": "legacy"},   
     
     # 🆕 新測試通道 (Cloudflare 網址專用)
-    -3006310733: {"symbol": "TESTING", "channel": "new"} 
+    -1003006310733: {"symbol": "TESTING", "channel": "new"} 
 }
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
