@@ -146,9 +146,8 @@ async def check_signal(request: Request, response: Response):
     
     # 如果是從 Cloudflare 網址過來的 (新測試客戶)
     if "goldbrother-api.xyz" in host:
-        # 開啟 CF 1 秒快取，保護 Render 流量
-        response.headers["Cache-Control"] = "public, max-age=1"
-        current = signal_new
+        response.headers["Cache-Control"] = "no-store"
+        current = signal_legacy
     else:
         # 如果是從舊 Render 網址過來的 (舊客戶)
         # 不開快取，提供舊的黃金/BTC 訊號
