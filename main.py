@@ -1,6 +1,7 @@
 import os
 import time
 import re
+import asyncio
 import logging
 logging.getLogger("uvicorn.access").disabled = True
 from fastapi import FastAPI, Response, Request
@@ -29,18 +30,22 @@ SIGNAL_TIMEOUT = 300
 
 app = FastAPI()
 
-# 🔥 給大腦穿上偽裝衣
+# 🔥 給大腦穿上偽裝衣 + 🆕 連線參數加固
 spy_client = TelegramClient(
     StringSession(SESSION_STRING),
     API_ID,
     API_HASH,
     device_model="iPhone 15 Pro Max",
     system_version="iOS 17.4.1",
-    app_version="10.11.0"
+    app_version="10.11.0",
+    connection_retries=10,
+    retry_delay=2,
+    auto_reconnect=True,
+    timeout=30,
 )
 bot_client = TelegramClient('bot_session', API_ID, API_HASH)
 
-# 📦 訊號保險箱 (各 channel 一個,獨立不串味)
+# 📦 訊號保險箱
 signal_legacy = {
     "id": 0, "action": "", "symbol": "", "entry": 0.0, "sl": 0.0,
     "tp1": 0.0, "tp2": 0.0, "tp3": 0.0, "tp4": 0.0
@@ -61,7 +66,6 @@ def parse_signal(text, default_symbol):
         "tp1": 0.0, "tp2": 0.0, "tp3": 0.0, "tp4": 0.0
     }
 
-    # 判斷動作
     if "BUY" in text or "做多" in text:
         data["action"] = "buy"
     elif "SELL" in text or "做空" in text:
@@ -72,8 +76,6 @@ def parse_signal(text, default_symbol):
     if not data["action"]:
         return None
 
-    # 關鍵:從文字中精準抓取商品名稱 (例如 XAUUSD 或 BTCUSD)
-    # 如果文字裡有寫,就蓋掉預設的 default_symbol
     symbol_match = re.search(r"(XAUUSD|BTCUSD|GOLD|BTC)", text)
     if symbol_match:
         found = symbol_match.group(1)
@@ -82,7 +84,6 @@ def parse_signal(text, default_symbol):
         elif found in ["BTC", "BTCUSD"]:
             data["symbol"] = "BTCUSD"
 
-    # 解析 SL/TP
     sl_match = re.search(r"SL\D*(\d+(\.\d+)?)", text)
     if sl_match:
         data["sl"] = float(sl_match.group(1))
@@ -110,13 +111,11 @@ async def spy_handler(event):
 
     result = parse_signal(event.raw_text, default_sym)
     if result and result["action"]:
-        # 🔑 按 channel 決定存進哪個訊號保險箱
         if channel == "legacy":
             target_signal = signal_legacy
         elif channel == "r50":
             target_signal = signal_r50
         else:
-            # 未知 channel 不存 (防呆)
             print(f"⚠️ 未知 channel: {channel},訊號丟棄")
             return
 
@@ -149,7 +148,6 @@ async def password_check(event):
     if event.id in handled_messages:
         return
     handled_messages.add(event.id)
-    # 🩹 修 bug:set 沒有索引,原本 pop(0) 跑久會 TypeError,改用 pop() 隨機丟一個
     if len(handled_messages) > 100:
         handled_messages.pop()
 
@@ -167,20 +165,15 @@ async def password_check(event):
 # ================= C: 智能交通警察 (API 路由) =================
 @app.get("/check_signal")
 async def check_signal(request: Request, response: Response):
-    # 🕵️ 辨識來者的「網址車牌」
     host = request.headers.get("host", "")
 
-    # ⚠️ 順序重要:r50.goldbrother-api.xyz 也含 goldbrother-api.xyz,長的要先判斷
     if "r50.goldbrother-api.xyz" in host:
-        # 🆕 r50 通道
         response.headers["Cache-Control"] = "no-store"
         current = signal_r50
     elif "goldbrother-api.xyz" in host:
-        # Cloudflare 網址 (既有客戶,保持現狀拉 legacy)
         response.headers["Cache-Control"] = "no-store"
         current = signal_legacy
     else:
-        # 舊 Render onrender.com 網址 (舊客戶,保持現狀拉 legacy)
         current = signal_legacy
 
     now = int(time.time() * 1000)
@@ -189,12 +182,64 @@ async def check_signal(request: Request, response: Response):
     return {"has_signal": True, "data": current}
 
 
+# 🆕 健康檢查 endpoint - 看 spy 是否還在線
+@app.get("/health")
+async def health(request: Request):
+    return {
+        "spy_connected": spy_client.is_connected(),
+        "bot_connected": bot_client.is_connected(),
+        "signal_legacy_id": signal_legacy["id"],
+        "signal_r50_id": signal_r50["id"],
+        "now": int(time.time() * 1000),
+    }
+
+
+# ================= 🆕 心跳重連任務 =================
+async def keep_spy_alive():
+    """每 60 秒檢查 spy 連線狀態,斷了就重連 + 重新載入 dialogs"""
+    while True:
+        await asyncio.sleep(60)
+        try:
+            if not spy_client.is_connected():
+                print("⚠️ spy 連線中斷,重連中...")
+                await spy_client.connect()
+                dialogs = await spy_client.get_dialogs(limit=200)
+                print(f"✅ spy 已重連,載入 {len(dialogs)} 個對話")
+            else:
+                # 健康狀態下也定期 ping dialog list,刷新訂閱
+                await spy_client.get_dialogs(limit=10)
+        except Exception as e:
+            print(f"❌ spy 心跳檢查失敗: {e}")
+
+
 @app.on_event("startup")
 async def startup_event():
     await spy_client.start()
+
+    # 🆕 預載 dialogs - Telethon 對 supergroup 需要這個才會訂閱 NewMessage events
+    dialogs = await spy_client.get_dialogs(limit=200)
+    print(f"📋 spy 已載入 {len(dialogs)} 個對話")
+
+    dialog_ids = set()
+    for d in dialogs:
+        try:
+            dialog_ids.add(d.id)
+        except Exception:
+            pass
+
+    for target_id in GROUP_CONFIG:
+        if target_id in dialog_ids:
+            print(f"   ✅ spy 在群裡: {target_id} ({GROUP_CONFIG[target_id]['channel']})")
+        else:
+            print(f"   ❌ spy 不在群裡(或 dialog 沒載到): {target_id}")
+
     await bot_client.start(bot_token=BOT_TOKEN)
+
+    # 🆕 啟動心跳任務
+    asyncio.create_task(keep_spy_alive())
+
     print("========================================")
-    print(f"✅ 三通道分流系統啟動!")
+    print(f"✅ 三通道分流系統啟動!(加固版)")
     print(f"🚗 舊通道 (onrender.com)          → signal_legacy")
     print(f"🚙 Cloudflare (goldbrother-api.xyz) → signal_legacy (既有客戶不動)")
     print(f"🚜 r50 (r50.goldbrother-api.xyz)    → signal_r50")
@@ -203,6 +248,9 @@ async def startup_event():
     print(f"   -1002249680342 (XAUUSD legacy)")
     print(f"   -1003307050368 (BTCUSD legacy)")
     print(f"   -1003006310733 (XAUUSD r50)")
+    print(f"")
+    print(f"💓 spy 心跳檢查每 60 秒一次")
+    print(f"🔍 健康檢查 endpoint: /health")
     print("========================================")
 
 
