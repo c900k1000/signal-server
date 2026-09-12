@@ -21,7 +21,7 @@ GROUP_CONFIG = {
     -1003307050368: {"symbol": "BTCUSD", "channel": "legacy"},
 
     # 🆕 r50 通道 (r50.goldbrother-api.xyz 專用)
-    -1003006310733: {"symbol": "XAUUSD", "channel": "r50"},
+    #-1003006310733: {"symbol": "XAUUSD", "channel": "r50"},
 }
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
