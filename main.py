@@ -21,7 +21,7 @@ GROUP_CONFIG = {
     -1003307050368: {"symbol": "BTCUSD", "channel": "legacy"},
 
     # 🆕 r50 通道 (r50.goldbrother-api.xyz 專用)
-    #-1003006310733: {"symbol": "XAUUSD", "channel": "r50"},
+    -1003006310733: {"symbol": "XAUUSD", "channel": "r50"},
 }
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -66,7 +66,10 @@ def parse_signal(text, default_symbol):
         "tp1": 0.0, "tp2": 0.0, "tp3": 0.0, "tp4": 0.0
     }
 
-    if "BUY" in text or "做多" in text:
+    # 換邊警告（例：⚠️AI detected high risk in S2. Please stop losses early.⚠️）→ 全部平倉
+    if "HIGH RISK" in text or "STOP LOSSES EARLY" in text:
+        data["action"] = "close_all"
+    elif "BUY" in text or "做多" in text:
         data["action"] = "buy"
     elif "SELL" in text or "做空" in text:
         data["action"] = "sell"
