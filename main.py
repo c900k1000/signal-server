@@ -69,6 +69,7 @@ def parse_signal(text, default_symbol):
     # 換邊警告（例：⚠️AI detected high risk in S2. Please stop losses early.⚠️）→ 全部平倉
     if "HIGH RISK" in text or "STOP LOSSES EARLY" in text:
         data["action"] = "close_all"
+        data["warning"] = True
     elif "BUY" in text or "做多" in text:
         data["action"] = "buy"
     elif "SELL" in text or "做空" in text:
@@ -113,6 +114,10 @@ async def spy_handler(event):
     print(f"✅ 收到 [{channel} 通道] 原始訊息內容: {event.raw_text}")
 
     result = parse_signal(event.raw_text, default_sym)
+    # 換邊警告目前只在 r50 測試通道生效，正式通道收到先不動作
+    if result and result.get("warning") and channel != "r50":
+        print(f"⏸ 換邊警告在 {channel} 通道不動作")
+        return
     if result and result["action"]:
         if channel == "legacy":
             target_signal = signal_legacy
