@@ -55,6 +55,7 @@ signal_r50 = {
     "tp1": 0.0, "tp2": 0.0, "tp3": 0.0, "tp4": 0.0
 }
 handled_messages = set()
+last_signal_text = {}  # 每個通道最後一則觸發 EA 的訊息與時間，用來擋 Telegram 重送造成的重複
 
 
 # ================= A: 訊號解析邏輯 =================
@@ -119,6 +120,13 @@ async def spy_handler(event):
         print(f"⏸ 換邊警告在 {channel} 通道不動作")
         return
     if result and result["action"]:
+        # 同一通道 120 秒內出現一模一樣的訊息 → 視為重送，不再給 EA（避免重複開單）
+        norm_text = " ".join(event.raw_text.split())
+        last = last_signal_text.get(channel)
+        if last and last[0] == norm_text and time.time() - last[1] < 120:
+            print(f"⏭ 重複訊息略過 ({channel}): {norm_text[:40]}")
+            return
+        last_signal_text[channel] = (norm_text, time.time())
         if channel == "legacy":
             target_signal = signal_legacy
         elif channel == "r50":
